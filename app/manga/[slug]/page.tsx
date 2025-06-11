@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams, useRouter, useSearchParams } from "next/navigation" // Import useSearchParams
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
   BookOpen,
@@ -28,21 +28,21 @@ import {
   type KitsuManga,
   searchKitsuManga,
 } from "@/lib/kitsu-api"
-import { searchMangaDexManga, getMangaDexChapters, getMangaDexManga, type Chapter } from "@/lib/mangadex-api" // Import getMangaDexManga
+import { searchMangaDexManga, getMangaDexChapters, getMangaDexManga, type Chapter } from "@/lib/mangadx-api"
 import LoadingSpinner from "@/components/loading-spinner"
+import LibraryStatusSelector from "@/components/library/library-status-selector"
 
 export default function MangaDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const searchParams = useSearchParams() // Initialize useSearchParams
+  const searchParams = useSearchParams()
   const [kitsuManga, setKitsuManga] = useState<KitsuManga | null>(null)
   const [mangadexMangaId, setMangadexMangaId] = useState<string | null>(null)
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [loading, setLoading] = useState(true)
-  const [isFavorited, setIsFavorited] = useState(false)
 
   const mangaSlug = params.slug as string
-  const mdidFromQuery = searchParams.get("mdid") // Get MangaDex ID from query parameter
+  const mdidFromQuery = searchParams.get("mdid")
 
   useEffect(() => {
     const fetchMangaDetails = async () => {
@@ -55,11 +55,9 @@ export default function MangaDetailPage() {
         let mangadexTitleForKitsuSearch: string | null = null
 
         if (mdidFromQuery) {
-          // Scenario 1: MangaDex ID is provided (from search results) - prioritize this for chapters
           currentMangadexMangaId = mdidFromQuery
           console.log("MangaDetailPage: Using mdid from query:", currentMangadexMangaId)
 
-          // Fetch MangaDex details to get its title for Kitsu lookup
           const mangadexResponse = await getMangaDexManga(currentMangadexMangaId)
           const mdManga = mangadexResponse.data
           if (mdManga) {
@@ -67,19 +65,16 @@ export default function MangaDetailPage() {
               mdManga.attributes.title?.en || mdManga.attributes.title?.[Object.keys(mdManga.attributes.title)[0]] || ""
             console.log("MangaDetailPage: MangaDex title for Kitsu search:", mangadexTitleForKitsuSearch)
 
-            // Search Kitsu using the MangaDex title to get rich details and poster
             const kitsuSearchData = await searchKitsuManga(mangadexTitleForKitsuSearch, 1)
             currentKitsuManga = kitsuSearchData.data[0] || null
             console.log("MangaDetailPage: Kitsu manga found via MangaDex title search:", currentKitsuManga)
           }
         } else {
-          // Scenario 2: No MangaDex ID in query (direct navigation or old link) - fallback to slug-based Kitsu search
           console.log("MangaDetailPage: No mdid in query. Falling back to slug-based Kitsu search.")
           currentKitsuManga = await getKitsuMangaBySlug(mangaSlug)
           console.log("MangaDetailPage: Kitsu data fetched by slug (fallback):", currentKitsuManga)
 
           if (currentKitsuManga) {
-            // If Kitsu manga found by slug, use its canonical title to search MangaDex for ID
             mangadexTitleForKitsuSearch =
               currentKitsuManga.attributes.canonicalTitle || currentKitsuManga.attributes.titles.en_jp || ""
             console.log(
@@ -96,7 +91,6 @@ export default function MangaDetailPage() {
         setMangadexMangaId(currentMangadexMangaId)
 
         if (currentMangadexMangaId) {
-          // Fetch chapters from MangaDex using the determined MangaDex ID
           const chaptersData = await getMangaDexChapters(currentMangadexMangaId)
           const sortedChapters = (chaptersData.data || []).sort((a, b) => {
             const aChapter = Number.parseFloat(a.attributes.chapter || "0")
@@ -115,12 +109,6 @@ export default function MangaDetailPage() {
           console.warn(`MangaDetailPage: No MangaDex ID determined for slug: ${mangaSlug}`)
           setChapters([])
         }
-
-        // Check if manga is favorited (using Kitsu ID if available, otherwise MangaDex ID as a fallback for favorites)
-        const favorites = JSON.parse(localStorage.getItem("favorites") || "[]")
-        setIsFavorited(
-          favorites.some((fav: { id: string }) => fav.id === (currentKitsuManga?.id || currentMangadexMangaId)),
-        )
       } catch (error) {
         console.error("MangaDetailPage: Error fetching manga details:", error)
         setKitsuManga(null)
@@ -133,27 +121,7 @@ export default function MangaDetailPage() {
     if (mangaSlug) {
       fetchMangaDetails()
     }
-  }, [mangaSlug, mdidFromQuery]) // Add mdidFromQuery to dependencies
-
-  const toggleFavorite = () => {
-    if (!kitsuManga && !mangadexMangaId) return // Cannot favorite if no ID is available
-
-    const favorites = JSON.parse(localStorage.getItem("favorites") || "[]")
-    let updatedFavorites
-
-    // Prioritize Kitsu ID for favorites, fallback to MangaDex ID if Kitsu is not available
-    const idToFavorite = kitsuManga?.id || mangadexMangaId
-    if (!idToFavorite) return // Should not happen if we reached here
-
-    if (isFavorited) {
-      updatedFavorites = favorites.filter((fav: { id: string }) => fav.id !== idToFavorite)
-    } else {
-      updatedFavorites = [...favorites, { id: idToFavorite, slug: mangaSlug }] // Store both ID and slug
-    }
-
-    localStorage.setItem("favorites", JSON.stringify(updatedFavorites))
-    setIsFavorited(!isFavorited)
-  }
+  }, [mangaSlug, mdidFromQuery])
 
   if (loading) {
     return (
@@ -163,7 +131,6 @@ export default function MangaDetailPage() {
     )
   }
 
-  // If after all attempts, no Kitsu manga is found and no MangaDex ID is found, then it's truly not found.
   if (!kitsuManga && !mangadexMangaId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
@@ -177,7 +144,6 @@ export default function MangaDetailPage() {
     )
   }
 
-  // Define these variables using kitsuManga if available, otherwise provide sensible defaults
   const posterUrl = kitsuManga ? getKitsuPosterImage(kitsuManga.attributes.posterImage) : "/placeholder.svg"
   const coverUrl = kitsuManga
     ? getKitsuCoverImage(kitsuManga.attributes.coverImage)
@@ -185,14 +151,16 @@ export default function MangaDetailPage() {
   const title = kitsuManga?.attributes.canonicalTitle || kitsuManga?.attributes.titles.en_jp || "Unknown Title"
   const description = kitsuManga?.attributes.description || "No description available"
 
-  // Safely access genres and authors with optional chaining and default to empty arrays
   const genres = kitsuManga?.relationships?.genres?.data?.map((g: any) => g.attributes.name) || []
   const authors = kitsuManga?.relationships?.staff?.data?.map((s: any) => s.attributes?.name || "Unknown") || []
 
-  // Function to get localized title, prioritizing English
-  const getLocalizedTitle = (titles: Record<string, string | undefined> | undefined) => {
-    if (!titles) return "N/A"
-    return titles.en || titles.en_jp || titles.ja_jp || Object.values(titles)[0] || "N/A"
+  // Prepare manga data for library operations
+  const mangaData = {
+    manga_id: mangadexMangaId || kitsuManga?.id || '',
+    manga_title: title,
+    manga_slug: mangaSlug,
+    poster_url: posterUrl,
+    total_chapters: kitsuManga?.attributes.chapterCount || chapters.length || undefined
   }
 
   return (
@@ -211,7 +179,7 @@ export default function MangaDetailPage() {
         </div>
       </div>
 
-      {/* Kitsu Banner Image */}
+      {/* Banner Image */}
       <div className="relative w-full h-64 md:h-80 lg:h-96 overflow-hidden">
         <Image
           src={coverUrl || "/placeholder.svg"}
@@ -219,8 +187,10 @@ export default function MangaDetailPage() {
           fill
           className="object-cover object-center"
           unoptimized
+          priority
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
       </div>
 
       <div className="container mx-auto px-4 py-8 -mt-24 relative z-10">
@@ -229,7 +199,7 @@ export default function MangaDetailPage() {
           <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-8 p-8 bg-gray-800/30 backdrop-blur-sm rounded-3xl border border-gray-700/50 shadow-xl">
             {/* Cover Image */}
             <div className="lg:col-span-1 -mt-24 md:-mt-32 lg:-mt-40">
-              <div className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-gray-800">
+              <div className="relative w-64 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-gray-800">
                 <Image src={posterUrl || "/placeholder.svg"} alt={title} fill className="object-cover" unoptimized />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
               </div>
@@ -353,16 +323,11 @@ export default function MangaDetailPage() {
                     </Button>
                   </Link>
                 )}
-                <Button
-                  variant="outline"
-                  onClick={toggleFavorite}
-                  className={`border-gray-600 hover:border-red-500 px-6 py-3 ${
-                    isFavorited ? "bg-red-600/20 text-red-400 border-red-500" : "text-gray-300"
-                  }`}
-                >
-                  <Heart className={`w-5 h-5 mr-2 ${isFavorited ? "fill-current" : ""}`} />
-                  {isFavorited ? "Favorited" : "Add to Favorites"}
-                </Button>
+                
+                <LibraryStatusSelector 
+                  mangaData={mangaData}
+                />
+                
                 <Button variant="outline" className="border-gray-600 hover:border-red-500 text-gray-300 px-6 py-3">
                   <Download className="w-5 h-5 mr-2" />
                   Download
@@ -402,7 +367,6 @@ export default function MangaDetailPage() {
               <div className="max-h-96 overflow-y-auto">
                 {chapters.length > 0 ? (
                   chapters.map((chapter) => {
-                    // Safely access relationships with optional chaining
                     const scanlationGroup = chapter.relationships?.find((rel) => rel.type === "scanlation_group")
                     const groupName = scanlationGroup?.attributes?.name || "Unknown Group"
 
