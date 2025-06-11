@@ -9,8 +9,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "AniReads - Premium Manga Reader",
-  description: "Discover, read, and immerse yourself in the world's best manga collection",
-    generator: 'v0.dev'
+  description: "Discover, read, and immerse yourself in the world's best manga collection"
 }
 
 export default function RootLayout({
