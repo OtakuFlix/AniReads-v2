@@ -24,13 +24,13 @@ import { getKitsuMangaBySlug, type KitsuManga } from "@/lib/kitsu-api"
 import {
   searchMangaDexManga,
   getMangaDexChapter,
-  getMangaDexChapterPages, // This function now has rate limiting
+  getMangaDexChapterPages,
   getMangaDexChapters,
   type Chapter,
-} from "@/lib/mangadex-api"
+} from "@/lib/mangadx-api"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import DummyMangaPage from "@/components/dummy-manga-page" // NEW IMPORT
+import DummyMangaPage from "@/components/dummy-manga-page"
 
 type ReadingMode = "single" | "double" | "vertical" | "webtoon"
 type Direction = "ltr" | "rtl"
@@ -49,7 +49,7 @@ export default function ReaderPage() {
   const [darkMode, setDarkMode] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [autoPlay, setAutoPlay] = useState(false)
-  const [autoPlayTimeout, setAutoPlayTimeout] = useState(3) // Default 3 seconds
+  const [autoPlayTimeout, setAutoPlayTimeout] = useState(3)
   const [pageTransition, setPageTransition] = useState(false)
   const autoHideTimer = useRef<NodeJS.Timeout | null>(null)
   const autoPlayTimer = useRef<NodeJS.Timeout | null>(null)
@@ -87,7 +87,7 @@ export default function ReaderPage() {
     if (autoPlay && currentPage < totalPages) {
       autoPlayTimer.current = setTimeout(() => {
         nextPage()
-      }, autoPlayTimeout * 1000) // Convert to milliseconds
+      }, autoPlayTimeout * 1000)
     }
     return () => {
       if (autoPlayTimer.current) {
@@ -139,6 +139,24 @@ export default function ReaderPage() {
     setLoadedImages((prev) => new Map(prev).set(pageIndex, "/placeholder.svg"))
   }, [])
 
+  // Save reading progress to cache
+  const saveReadingProgress = useCallback((page: number) => {
+    const readingHistory = JSON.parse(localStorage.getItem("readingHistory") || "{}")
+    readingHistory[mangaSlug] = {
+      lastTime: new Date().toISOString(),
+      mangaId: mangadexMangaId || mangaSlug,
+      mangaSlug: mangaSlug,
+      mangaTitle: mangaTitle,
+      chapterId: chapterId,
+      chapter: currentMangaDexChapter?.attributes?.chapter || "Unknown",
+      page: page,
+      totalPages: totalPages,
+      posterUrl: kitsuManga?.attributes?.posterImage?.medium || kitsuManga?.attributes?.posterImage?.small,
+      lastRead: new Date().toISOString()
+    }
+    localStorage.setItem("readingHistory", JSON.stringify(readingHistory))
+  }, [mangaSlug, mangadexMangaId, mangaTitle, chapterId, currentMangaDexChapter, totalPages, kitsuManga])
+
   useEffect(() => {
     const fetchReaderData = async () => {
       try {
@@ -179,7 +197,7 @@ export default function ReaderPage() {
               }`,
             )
 
-            const pagesResponse = await getMangaDexChapterPages(chapterId) // This call is now rate-limited
+            const pagesResponse = await getMangaDexChapterPages(chapterId)
             const baseUrl = pagesResponse.baseUrl
             const chapterData = pagesResponse.chapter
 
@@ -204,12 +222,8 @@ export default function ReaderPage() {
             }
             setCurrentPage(initialPage)
 
-            readingHistory[mangaSlug] = {
-              chapterId: chapterId,
-              lastRead: new Date().toISOString(),
-              page: initialPage,
-            }
-            localStorage.setItem("readingHistory", JSON.stringify(readingHistory))
+            // Save initial progress
+            saveReadingProgress(initialPage)
           } else {
             console.warn(`No MangaDex entry found for Kitsu manga: ${kitsuData.attributes.canonicalTitle}`)
             setImageUrls([])
@@ -238,7 +252,7 @@ export default function ReaderPage() {
         clearTimeout(autoHideTimer.current)
       }
     }
-  }, [mangaSlug, chapterId, hideControlsAfterDelay])
+  }, [mangaSlug, chapterId, hideControlsAfterDelay, saveReadingProgress])
 
   // Preload images based on current page
   useEffect(() => {
@@ -272,7 +286,7 @@ export default function ReaderPage() {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return // Don't interfere with input fields
+      if (e.target instanceof HTMLInputElement) return
 
       switch (e.key) {
         case "ArrowLeft":
@@ -328,7 +342,7 @@ export default function ReaderPage() {
 
     if (newPage > currentPage) {
       setCurrentPage(newPage)
-      saveProgress(newPage)
+      saveReadingProgress(newPage)
     } else if (currentPage === totalPages) {
       goToNextChapter()
     }
@@ -343,17 +357,9 @@ export default function ReaderPage() {
 
     if (newPage < currentPage) {
       setCurrentPage(newPage)
-      saveProgress(newPage)
+      saveReadingProgress(newPage)
     } else if (currentPage === 1) {
       goToPrevChapter()
-    }
-  }
-
-  const saveProgress = (page: number) => {
-    const readingHistory = JSON.parse(localStorage.getItem("readingHistory") || "{}")
-    if (readingHistory[mangaSlug]) {
-      readingHistory[mangaSlug].page = page
-      localStorage.setItem("readingHistory", JSON.stringify(readingHistory))
     }
   }
 
@@ -466,7 +472,6 @@ export default function ReaderPage() {
           />
         ) : (
           <div className="w-full h-full bg-gray-800 flex items-center justify-center rounded-lg">
-            {/* Simpler pulsating placeholder for individual image loading */}
             <div className="animate-pulse w-1/2 h-1/2 bg-gray-700 rounded-md" />
           </div>
         )}
@@ -477,7 +482,7 @@ export default function ReaderPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <DummyMangaPage /> {/* Use DummyMangaPage for initial chapter load */}
+        <DummyMangaPage />
       </div>
     )
   }
@@ -567,7 +572,6 @@ export default function ReaderPage() {
                   <TooltipContent>{autoPlay ? "Pause Auto-play" : "Start Auto-play"}</TooltipContent>
                 </Tooltip>
 
-                {/* Add timeout selector */}
                 {autoPlay && (
                   <Select
                     value={autoPlayTimeout.toString()}
@@ -673,7 +677,7 @@ export default function ReaderPage() {
                     value={[currentPage]}
                     onValueChange={(value) => {
                       setCurrentPage(value[0])
-                      saveProgress(value[0])
+                      saveReadingProgress(value[0])
                     }}
                     max={totalPages}
                     min={1}

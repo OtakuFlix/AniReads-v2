@@ -13,13 +13,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent } from "@/components/ui/card"
-import Link from "next/link"
-import Image from "next/image"
-import { searchMangaDexManga, type Manga } from "@/lib/mangadex-api"
+import { searchMangaDexManga, type Manga } from "@/lib/mangadx-api"
 import { searchKitsuManga, getKitsuPosterImage, type KitsuManga } from "@/lib/kitsu-api"
 import LoadingSpinner from "@/components/loading-spinner"
 import { useDebounce } from "@/hooks/use-debounce"
 import { slugify } from "@/lib/slugify"
+import MangaCard from "@/components/manga-card"
 
 interface SearchResultManga extends Manga {
   kitsuPosterUrl?: string
@@ -563,102 +562,66 @@ export default function SearchPage() {
                       .filter(Boolean)
 
                     const rating = manga.kitsuManga?.attributes.averageRating
-                      ? Number.parseFloat(manga.kitsuManga.attributes.averageRating).toFixed(1)
-                      : null
+                      ? Number.parseFloat(manga.kitsuManga.attributes.averageRating)
+                      : undefined
+
+                    if (viewMode === "grid") {
+                      return (
+                        <MangaCard
+                          key={manga.id}
+                          id={manga.id}
+                          title={mdTitle}
+                          slug={mangaSlug}
+                          posterUrl={posterUrl}
+                          rating={rating}
+                          status={manga.attributes.status}
+                          genres={genres}
+                        />
+                      )
+                    }
 
                     return (
-                      <Link
-                        key={manga.id}
-                        href={`/manga/${mangaSlug}?mdid=${manga.id}`}
-                        className={
-                          viewMode === "grid"
-                            ? "group"
-                            : "group flex gap-4 bg-gray-800/30 rounded-xl p-4 hover:bg-gray-800/50 transition-all duration-300"
-                        }
-                      >
-                        {viewMode === "grid" ? (
-                          <Card className="bg-gray-800/30 border-gray-700/30 hover:border-red-500/50 transition-all duration-300 hover:scale-105 overflow-hidden">
-                            <div className="relative aspect-[3/4] overflow-hidden">
-                              <Image
-                                src={posterUrl || "/placeholder.svg"}
-                                alt={mdTitle}
-                                fill
-                                className="object-cover group-hover:scale-110 transition-transform duration-500"
-                                unoptimized
-                              />
-                              {rating && (
-                                <div className="absolute top-2 left-2">
-                                  <Badge className="bg-yellow-600/90 text-white text-xs">
-                                    <Star className="w-3 h-3 mr-1 fill-current" />
-                                    {rating}
-                                  </Badge>
-                                </div>
-                              )}
-                            </div>
-                            <CardContent className="p-4 space-y-2">
-                              <h3 className="font-semibold text-white group-hover:text-red-400 transition-colors text-sm line-clamp-2">
-                                {mdTitle}
-                              </h3>
-                              <div className="flex flex-wrap gap-1">
-                                {genres.slice(0, 2).map((genre) => (
-                                  <Badge
-                                    key={genre}
-                                    variant="secondary"
-                                    className="bg-gray-700/50 text-gray-300 text-xs"
-                                  >
-                                    {genre}
-                                  </Badge>
-                                ))}
-                              </div>
-                              <div className="text-xs text-gray-400">
-                                {manga.attributes.status.charAt(0).toUpperCase() + manga.attributes.status.slice(1)}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ) : (
-                          <>
-                            <div className="relative w-24 aspect-[3/4] rounded-lg overflow-hidden flex-shrink-0">
-                              <Image
-                                src={posterUrl || "/placeholder.svg"}
-                                alt={mdTitle}
-                                fill
-                                className="object-cover"
-                                unoptimized
-                              />
-                            </div>
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-start justify-between">
-                                <h3 className="font-semibold text-white group-hover:text-red-400 transition-colors line-clamp-2">
-                                  {mdTitle}
-                                </h3>
-                                {rating && (
-                                  <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600/30 text-xs">
-                                    <Star className="w-3 h-3 mr-1 fill-current" />
-                                    {rating}
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {genres.slice(0, 4).map((genre) => (
-                                  <Badge
-                                    key={genre}
-                                    variant="secondary"
-                                    className="bg-gray-700/50 text-gray-300 text-xs"
-                                  >
-                                    {genre}
-                                  </Badge>
-                                ))}
-                              </div>
-                              <div className="flex items-center gap-4 text-sm text-gray-400">
-                                <span>
-                                  {manga.attributes.status.charAt(0).toUpperCase() + manga.attributes.status.slice(1)}
-                                </span>
-                                {manga.attributes.year && <span>{manga.attributes.year}</span>}
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </Link>
+                      <div key={manga.id} className="flex gap-4 bg-gray-800/30 rounded-xl p-4 hover:bg-gray-800/50 transition-all duration-300">
+                        <div className="relative w-24 aspect-[3/4] rounded-lg overflow-hidden flex-shrink-0">
+                          <Image
+                            src={posterUrl || "/placeholder.svg"}
+                            alt={mdTitle}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-start justify-between">
+                            <h3 className="font-semibold text-white group-hover:text-red-400 transition-colors line-clamp-2">
+                              {mdTitle}
+                            </h3>
+                            {rating && (
+                              <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600/30 text-xs">
+                                <Star className="w-3 h-3 mr-1 fill-current" />
+                                {rating.toFixed(1)}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {genres.slice(0, 4).map((genre) => (
+                              <Badge
+                                key={genre}
+                                variant="secondary"
+                                className="bg-gray-700/50 text-gray-300 text-xs"
+                              >
+                                {genre}
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-gray-400">
+                            <span>
+                              {manga.attributes.status.charAt(0).toUpperCase() + manga.attributes.status.slice(1)}
+                            </span>
+                            {manga.attributes.year && <span>{manga.attributes.year}</span>}
+                          </div>
+                        </div>
+                      </div>
                     )
                   })}
                 </div>

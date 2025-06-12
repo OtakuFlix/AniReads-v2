@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { 
   DropdownMenu, 
@@ -14,7 +14,7 @@ import { READING_STATUSES, type ReadingStatus } from '@/lib/library'
 import { useAuth } from '@/contexts/auth-context'
 import { addToLibrary, updateLibraryEntry, removeFromLibrary, getLibraryEntry } from '@/lib/library'
 import { toast } from 'sonner'
-import { useEffect } from 'react'
+import QuickAddDialog from './quick-add-dialog'
 
 interface LibraryStatusSelectorProps {
   mangaData: {
@@ -43,6 +43,7 @@ export default function LibraryStatusSelector({
   const { user } = useAuth()
   const [currentStatus, setCurrentStatus] = useState<ReadingStatus | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showQuickAdd, setShowQuickAdd] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -109,7 +110,16 @@ export default function LibraryStatusSelector({
   }
 
   if (!user) {
-    return null
+    return (
+      <Button 
+        onClick={() => setShowQuickAdd(true)}
+        variant="outline" 
+        className="border-gray-600 hover:border-red-500 text-gray-300 px-6 py-3"
+      >
+        <Plus className="w-5 h-5 mr-2" />
+        Add to Library
+      </Button>
+    )
   }
 
   const currentStatusData = currentStatus 
@@ -117,59 +127,67 @@ export default function LibraryStatusSelector({
     : null
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button 
-          variant={currentStatus ? "default" : "outline"}
-          className={currentStatus ? "bg-green-600 hover:bg-green-700" : ""}
-          disabled={loading}
-        >
-          {currentStatus ? (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button 
+            variant={currentStatus ? "default" : "outline"}
+            className={currentStatus ? "bg-green-600 hover:bg-green-700" : "border-gray-600 hover:border-red-500 text-gray-300 px-6 py-3"}
+            disabled={loading}
+          >
+            {currentStatus ? (
+              <>
+                {React.createElement(statusIcons[currentStatus], { className: "w-4 h-4 mr-2" })}
+                {currentStatusData?.label}
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 mr-2" />
+                Add to Library
+              </>
+            )}
+            <ChevronDown className="w-4 h-4 ml-2" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          {READING_STATUSES.map((status) => {
+            const Icon = statusIcons[status.value]
+            return (
+              <DropdownMenuItem
+                key={status.value}
+                onClick={() => handleStatusChange(status.value)}
+                className="flex items-center gap-2"
+              >
+                <Icon className="w-4 h-4" />
+                {status.label}
+                {currentStatus === status.value && (
+                  <Badge variant="secondary" className="ml-auto">
+                    Current
+                  </Badge>
+                )}
+              </DropdownMenuItem>
+            )
+          })}
+          {currentStatus && (
             <>
-              {React.createElement(statusIcons[currentStatus], { className: "w-4 h-4 mr-2" })}
-              {currentStatusData?.label}
-            </>
-          ) : (
-            <>
-              <Plus className="w-4 h-4 mr-2" />
-              Add to Library
+              <div className="border-t my-1" />
+              <DropdownMenuItem
+                onClick={handleRemoveFromLibrary}
+                className="flex items-center gap-2 text-red-600 hover:text-red-700"
+              >
+                <X className="w-4 h-4" />
+                Remove from Library
+              </DropdownMenuItem>
             </>
           )}
-          <ChevronDown className="w-4 h-4 ml-2" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        {READING_STATUSES.map((status) => {
-          const Icon = statusIcons[status.value]
-          return (
-            <DropdownMenuItem
-              key={status.value}
-              onClick={() => handleStatusChange(status.value)}
-              className="flex items-center gap-2"
-            >
-              <Icon className="w-4 h-4" />
-              {status.label}
-              {currentStatus === status.value && (
-                <Badge variant="secondary" className="ml-auto">
-                  Current
-                </Badge>
-              )}
-            </DropdownMenuItem>
-          )
-        })}
-        {currentStatus && (
-          <>
-            <div className="border-t my-1" />
-            <DropdownMenuItem
-              onClick={handleRemoveFromLibrary}
-              className="flex items-center gap-2 text-red-600 hover:text-red-700"
-            >
-              <X className="w-4 h-4" />
-              Remove from Library
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <QuickAddDialog
+        open={showQuickAdd}
+        onOpenChange={setShowQuickAdd}
+        mangaData={mangaData}
+      />
+    </>
   )
 }

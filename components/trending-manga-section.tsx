@@ -3,11 +3,9 @@
 import { useEffect, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import Link from "next/link"
-import Image from "next/image"
-import { getKitsuTrendingManga, getKitsuPosterImage, type KitsuManga } from "@/lib/kitsu-api"
+import { getKitsuTrendingManga, type KitsuManga } from "@/lib/kitsu-api"
 import { slugify } from "@/lib/slugify"
+import MangaCard from "@/components/manga-card"
 
 export default function TrendingMangaSection() {
   const [manga, setManga] = useState<KitsuManga[]>([])
@@ -89,49 +87,27 @@ export default function TrendingMangaSection() {
         >
           {manga.map((item) => {
             const title = item.attributes.canonicalTitle || item.attributes.titles.en_jp || "Unknown Title"
-            const posterUrl = getKitsuPosterImage(item.attributes.posterImage)
-            const description = item.attributes.description || "No description available."
+            const posterUrl = item.attributes.posterImage?.large || 
+                             item.attributes.posterImage?.medium || 
+                             item.attributes.posterImage?.small || 
+                             "/placeholder.svg"
             const genres = item.relationships.genres?.data?.map((g: any) => g.attributes.name) || []
-            const mangaSlug = slugify(title) // Generate slug for linking
+            const mangaSlug = slugify(title)
 
             return (
-              <Link key={item.id} href={`/manga/${mangaSlug}`} className="flex-none w-full md:w-1/2 lg:w-1/3 group">
-                <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl overflow-hidden border border-gray-700/50 hover:border-red-500/50 transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-red-500/10">
-                  <div className="relative aspect-[3/4] overflow-hidden">
-                    <Image
-                      src={posterUrl || "/placeholder.svg"}
-                      alt={title}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-500"
-                      unoptimized
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                    <div className="absolute top-4 left-4">
-                      <Badge className="bg-red-600 hover:bg-red-600 text-white">Trending</Badge>
-                    </div>
-                  </div>
-
-                  <div className="p-6 space-y-4">
-                    <h3 className="text-xl font-bold text-white group-hover:text-red-400 transition-colors line-clamp-2">
-                      {title}
-                    </h3>
-
-                    <div className="flex flex-wrap gap-2">
-                      {genres.slice(0, 3).map((genre) => (
-                        <Badge
-                          key={genre}
-                          variant="secondary"
-                          className="bg-gray-700/50 text-gray-300 hover:bg-red-600/20 hover:text-red-400 text-xs"
-                        >
-                          {genre}
-                        </Badge>
-                      ))}
-                    </div>
-
-                    <p className="text-gray-400 text-sm line-clamp-3 leading-relaxed">{description}</p>
-                  </div>
-                </div>
-              </Link>
+              <div key={item.id} className="flex-none w-full md:w-1/2 lg:w-1/3">
+                <MangaCard
+                  id={item.id}
+                  title={title}
+                  slug={mangaSlug}
+                  posterUrl={posterUrl}
+                  rating={item.attributes.averageRating ? parseFloat(item.attributes.averageRating) : undefined}
+                  status={item.attributes.status}
+                  genres={genres}
+                  chapterCount={item.attributes.chapterCount}
+                  className="h-full"
+                />
+              </div>
             )
           })}
         </div>

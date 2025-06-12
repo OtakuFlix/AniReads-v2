@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import Hero from "@/components/hero"
 import SpotlightSection from "@/components/spotlight-section"
+import ContinueReadingSection from "@/components/continue-reading-section"
 import TrendingMangaSection from "@/components/trending-manga-section"
 import RecentMangaSection from "@/components/recent-manga-section"
 import LoadingSpinner from "@/components/loading-spinner"
@@ -12,6 +13,9 @@ export default function HomePage() {
       <div className="container mx-auto px-4 py-8 space-y-16">
         <Suspense fallback={<LoadingSpinner />}>
           <SpotlightSection />
+        </Suspense>
+        <Suspense fallback={<LoadingSpinner />}>
+          <ContinueReadingSection />
         </Suspense>
         <Suspense fallback={<LoadingSpinner />}>
           <TrendingMangaSection />
