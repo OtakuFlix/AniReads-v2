@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/auth-context'
 import MangaBanner from '@/components/manga/manga-banner'
 import MangaHeader from '@/components/manga/manga-header'
 import MangaDetails from '@/components/manga/manga-details'
+import MangaComments from '@/components/manga/manga-comments'
 import {
   getKitsuMangaBySlug,
   getKitsuPosterImage,
@@ -13,7 +14,7 @@ import {
   type KitsuManga,
   searchKitsuManga,
 } from "@/lib/kitsu-api"
-import { searchMangaDexManga, getMangaDexChapters, getMangaDexManga, type Chapter } from "@/lib/mangadex-api"
+import { searchMangaDxManga, getMangaDxChapters, getMangaDxManga, type Chapter } from "@/lib/mangadx-api"
 import LoadingSpinner from "@/components/loading-spinner"
 import LibraryStatusSelector from "@/components/library/library-status-selector"
 import { Button } from "@/components/ui/button"
@@ -23,7 +24,7 @@ export default function MangaDetailPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [kitsuManga, setKitsuManga] = useState<KitsuManga | null>(null)
-  const [mangadexMangaId, setMangadexMangaId] = useState<string | null>(null)
+  const [mangadxMangaId, setMangadxMangaId] = useState<string | null>(null)
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [loading, setLoading] = useState(true)
   const { user } = useAuth()
@@ -38,47 +39,49 @@ export default function MangaDetailPage() {
         console.log("MangaDetailPage: Fetching details for slug:", mangaSlug, "and mdid:", mdidFromQuery)
 
         let currentKitsuManga: KitsuManga | null = null
-        let currentMangadexMangaId: string | null = null
-        let mangadexTitleForKitsuSearch: string | null = null
+        let currentMangadxMangaId: string | null = null
+        let mangadxTitleForKitsuSearch: string | null = null
 
-        if (mdidFromQuery) {
-          currentMangadexMangaId = mdidFromQuery
-          console.log("MangaDetailPage: Using mdid from query:", currentMangadexMangaId)
+        // Check if slug is actually a MangaDx ID (UUID format)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        
+        if (uuidRegex.test(mangaSlug) || mdidFromQuery) {
+          // Use MangaDx ID directly
+          currentMangadxMangaId = mdidFromQuery || mangaSlug
+          console.log("MangaDetailPage: Using MangaDx ID:", currentMangadxMangaId)
 
-          const mangadexResponse = await getMangaDexManga(currentMangadexMangaId)
-          const mdManga = mangadexResponse.data
+          const mangadxResponse = await getMangaDxManga(currentMangadxMangaId)
+          const mdManga = mangadxResponse.data
           if (mdManga) {
-            mangadexTitleForKitsuSearch =
+            mangadxTitleForKitsuSearch =
               mdManga.attributes.title?.en || mdManga.attributes.title?.[Object.keys(mdManga.attributes.title)[0]] || ""
-            console.log("MangaDetailPage: MangaDex title for Kitsu search:", mangadexTitleForKitsuSearch)
+            console.log("MangaDetailPage: MangaDx title for Kitsu search:", mangadxTitleForKitsuSearch)
 
-            const kitsuSearchData = await searchKitsuManga(mangadexTitleForKitsuSearch, 1)
+            const kitsuSearchData = await searchKitsuManga(mangadxTitleForKitsuSearch, 1)
             currentKitsuManga = kitsuSearchData.data[0] || null
-            console.log("MangaDetailPage: Kitsu manga found via MangaDex title search:", currentKitsuManga)
+            console.log("MangaDetailPage: Kitsu manga found via MangaDx title search:", currentKitsuManga)
           }
         } else {
-          console.log("MangaDetailPage: No mdid in query. Falling back to slug-based Kitsu search.")
+          // Use slug for Kitsu search first
+          console.log("MangaDetailPage: Using slug for Kitsu search:", mangaSlug)
           currentKitsuManga = await getKitsuMangaBySlug(mangaSlug)
-          console.log("MangaDetailPage: Kitsu data fetched by slug (fallback):", currentKitsuManga)
+          console.log("MangaDetailPage: Kitsu data fetched by slug:", currentKitsuManga)
 
           if (currentKitsuManga) {
-            mangadexTitleForKitsuSearch =
+            mangadxTitleForKitsuSearch =
               currentKitsuManga.attributes.canonicalTitle || currentKitsuManga.attributes.titles.en_jp || ""
-            console.log(
-              "MangaDetailPage: Kitsu manga found by slug. Searching MangaDex for ID with title:",
-              mangadexTitleForKitsuSearch,
-            )
-            const mangadexSearch = await searchMangaDexManga(mangadexTitleForKitsuSearch, 1)
-            currentMangadexMangaId = mangadexSearch.data[0]?.id || null
-            console.log("MangaDetailPage: MangaDex ID found from Kitsu title (fallback):", currentMangadexMangaId)
+            console.log("MangaDetailPage: Searching MangaDx with Kitsu title:", mangadxTitleForKitsuSearch)
+            const mangadxSearch = await searchMangaDxManga(mangadxTitleForKitsuSearch, 1)
+            currentMangadxMangaId = mangadxSearch.data[0]?.id || null
+            console.log("MangaDetailPage: MangaDx ID found from Kitsu title:", currentMangadxMangaId)
           }
         }
 
         setKitsuManga(currentKitsuManga)
-        setMangadexMangaId(currentMangadexMangaId)
+        setMangadxMangaId(currentMangadxMangaId)
 
-        if (currentMangadexMangaId) {
-          const chaptersData = await getMangaDexChapters(currentMangadexMangaId)
+        if (currentMangadxMangaId) {
+          const chaptersData = await getMangaDxChapters(currentMangadxMangaId)
           const sortedChapters = (chaptersData.data || []).sort((a, b) => {
             const aChapter = Number.parseFloat(a.attributes.chapter || "0")
             const bChapter = Number.parseFloat(b.attributes.chapter || "0")
@@ -93,7 +96,7 @@ export default function MangaDetailPage() {
           setChapters(sortedChapters)
           console.log("MangaDetailPage: Chapters fetched:", sortedChapters.length)
         } else {
-          console.warn(`MangaDetailPage: No MangaDex ID determined for slug: ${mangaSlug}`)
+          console.warn(`MangaDetailPage: No MangaDx ID determined for slug: ${mangaSlug}`)
           setChapters([])
         }
       } catch (error) {
@@ -118,7 +121,7 @@ export default function MangaDetailPage() {
     )
   }
 
-  if (!kitsuManga && !mangadexMangaId) {
+  if (!kitsuManga && !mangadxMangaId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -141,11 +144,11 @@ export default function MangaDetailPage() {
   const genres = kitsuManga?.relationships?.genres?.data?.map((g: any) => g.attributes.name) || []
   const authors = kitsuManga?.relationships?.staff?.data?.map((s: any) => s.attributes?.name || "Unknown") || []
 
-  // Prepare manga data for library operations
+  // Prepare manga data for library operations - use MangaDx ID as primary identifier
   const mangaData = {
-    manga_id: mangadexMangaId || kitsuManga?.id || "",
+    manga_id: mangadxMangaId || kitsuManga?.id || "",
     manga_title: title,
-    manga_slug: mangaSlug,
+    manga_slug: mangadxMangaId || mangaSlug, // Use MangaDx ID as slug for consistency
     poster_url: kitsuManga ? getKitsuPosterImage(kitsuManga.attributes.posterImage) : '/placeholder.svg',
     total_chapters: kitsuManga?.attributes.chapterCount || chapters.length || undefined,
   }
@@ -159,15 +162,19 @@ export default function MangaDetailPage() {
             <MangaHeader
               kitsuManga={kitsuManga}
               mangaData={mangaData}
-              mangaSlug={mangaSlug}
+              mangaSlug={mangadxMangaId || mangaSlug}
               chapters={chapters}
             />
           </aside>
-          <div className="md:col-span-2 lg:col-span-3">
+          <div className="md:col-span-2 lg:col-span-3 space-y-8">
             <MangaDetails
               kitsuManga={kitsuManga}
               chapters={chapters}
-              mangaSlug={mangaSlug}
+              mangaSlug={mangadxMangaId || mangaSlug}
+            />
+            <MangaComments
+              mangaId={mangadxMangaId || kitsuManga?.id || mangaSlug}
+              mangaTitle={title}
             />
           </div>
         </div>

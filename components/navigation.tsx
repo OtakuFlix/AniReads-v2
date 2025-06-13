@@ -3,10 +3,11 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, Search, Bookmark, Download, Menu, X, User, LogOut, Library } from "lucide-react"
+import { BookOpen, Search, Bookmark, Download, Menu, X, User, LogOut, Library, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import AuthModal from "@/components/auth/auth-modal"
+import UserProfile from "@/components/user-profile"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,11 +15,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
   const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
   const pathname = usePathname()
   const { user, loading, signOut } = useAuth()
 
@@ -115,6 +123,10 @@ export default function Navigation() {
                       </p>
                     </div>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setProfileModalOpen(true)}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Profile Settings</span>
+                    </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/library" className="flex items-center">
                         <Library className="mr-2 h-4 w-4" />
@@ -125,6 +137,12 @@ export default function Navigation() {
                       <Link href="/bookmarks" className="flex items-center">
                         <Bookmark className="mr-2 h-4 w-4" />
                         <span>Bookmarks</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/downloads" className="flex items-center">
+                        <Download className="mr-2 h-4 w-4" />
+                        <span>Downloads</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -186,6 +204,15 @@ export default function Navigation() {
       </nav>
 
       <AuthModal open={authModalOpen} onOpenChange={setAuthModalOpen} />
+      
+      <Dialog open={profileModalOpen} onOpenChange={setProfileModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Profile Settings</DialogTitle>
+          </DialogHeader>
+          <UserProfile onClose={() => setProfileModalOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

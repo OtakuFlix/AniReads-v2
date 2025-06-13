@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getMangaDexTrendingWithKitsuPosters } from "@/lib/mangadex-api"
+import { getMangaDxTrendingWithKitsuPosters } from "@/lib/mangadx-api"
 import { slugify } from "@/lib/slugify"
 import MangaCard from "@/components/manga-card"
 
@@ -35,10 +35,10 @@ export default function TrendingMangaSection() {
   useEffect(() => {
     const fetchManga = async () => {
       try {
-        // Log the MangaDex API URL
-        const apiUrl = "/api/proxy/mangadex/manga?limit=20&order[followedCount]=desc&includes[]=cover_art"
-        console.log("Trending MangaDex fetch URL:", apiUrl)
-        const data = await getMangaDexTrendingWithKitsuPosters(20)
+        // Log the MangaDx API URL
+        const apiUrl = "/api/proxy/mangadx/manga?limit=20&order[followedCount]=desc&includes[]=cover_art"
+        console.log("Trending MangaDx fetch URL:", apiUrl)
+        const data = await getMangaDxTrendingWithKitsuPosters(20)
         setManga(data || [])
       } catch (error) {
         console.error("Error fetching trending manga:", error)
@@ -119,7 +119,7 @@ export default function TrendingMangaSection() {
               (rel: any) => rel.type === 'cover_art' && rel.attributes?.fileName
             )
             const coverUrl = coverArt 
-              ? `https://uploads.mangadex.org/covers/${item.id}/${coverArt.attributes?.fileName}.256.jpg`
+              ? `https://uploads.mangadx.org/covers/${item.id}/${coverArt.attributes?.fileName}.256.jpg`
               : ''
 
             return (
@@ -134,6 +134,7 @@ export default function TrendingMangaSection() {
                 status={item.attributes.status}
                 year={item.attributes.year}
                 contentRating={item.attributes.contentRating}
+                useMangaDxId={true} // Use MangaDx ID for routing
               />
             )
           })}

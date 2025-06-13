@@ -16,6 +16,11 @@ import {
   Download,
   Play,
   Pause,
+  Settings,
+  BookOpen,
+  Monitor,
+  Smartphone,
+  Tablet,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
@@ -27,13 +32,30 @@ import {
   getMangaDexChapterPages,
   getMangaDexChapters,
   type Chapter,
-} from "@/lib/mangadex-api"
+} from "@/lib/mangadx-api"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
 import DummyMangaPage from "@/components/dummy-manga-page"
 
 type ReadingMode = "single" | "double" | "vertical" | "webtoon"
 type Direction = "ltr" | "rtl"
+
+interface DownloadedChapter {
+  id: string
+  mangaId: string
+  mangaTitle: string
+  mangaSlug: string
+  chapterId: string
+  chapterNumber: string
+  chapterTitle: string
+  posterUrl: string
+  pages: string[]
+  downloadedAt: string
+  size: number
+}
 
 export default function ReaderPage() {
   const params = useParams()
@@ -51,6 +73,10 @@ export default function ReaderPage() {
   const [autoPlay, setAutoPlay] = useState(false)
   const [autoPlayTimeout, setAutoPlayTimeout] = useState(3)
   const [pageTransition, setPageTransition] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
+  
   const autoHideTimer = useRef<NodeJS.Timeout | null>(null)
   const autoPlayTimer = useRef<NodeJS.Timeout | null>(null)
   const [loading, setLoading] = useState(true)
@@ -157,6 +183,36 @@ export default function ReaderPage() {
     localStorage.setItem("readingHistory", JSON.stringify(readingHistory))
   }, [mangaSlug, mangadexMangaId, mangaTitle, chapterId, currentMangaDexChapter, totalPages, kitsuManga])
 
+  // Check for offline content first
+  const checkOfflineContent = useCallback(() => {
+    try {
+      const downloads = JSON.parse(localStorage.getItem('manga_downloads') || '[]')
+      const offlineChapter = downloads.find((d: DownloadedChapter) => d.chapterId === chapterId)
+      
+      if (offlineChapter) {
+        setIsOffline(true)
+        setImageUrls(offlineChapter.pages)
+        setTotalPages(offlineChapter.pages.length)
+        setMangaTitle(offlineChapter.mangaTitle)
+        setChapterTitle(`Chapter ${offlineChapter.chapterNumber}${offlineChapter.chapterTitle ? `: ${offlineChapter.chapterTitle}` : ''}`)
+        
+        // Load saved progress
+        const readingHistory = JSON.parse(localStorage.getItem("readingHistory") || "{}")
+        const savedProgress = readingHistory[mangaSlug]
+        let initialPage = 1
+        if (savedProgress && savedProgress.chapterId === chapterId && savedProgress.page) {
+          initialPage = Math.min(savedProgress.page, offlineChapter.pages.length)
+        }
+        setCurrentPage(initialPage)
+        setLoading(false)
+        return true
+      }
+    } catch (error) {
+      console.error('Error checking offline content:', error)
+    }
+    return false
+  }, [chapterId, mangaSlug])
+
   useEffect(() => {
     const fetchReaderData = async () => {
       try {
@@ -164,72 +220,103 @@ export default function ReaderPage() {
         loadingStates.current.clear()
         setLoadedImages(new Map())
 
-        const kitsuData = await getKitsuMangaBySlug(mangaSlug)
-        setKitsuManga(kitsuData)
-        if (kitsuData) {
-          setMangaTitle(kitsuData.attributes.canonicalTitle || kitsuData.attributes.titles.en_jp || "Unknown Manga")
+        // Check offline content first
+        if (checkOfflineContent()) {
+          return
+        }
 
-          const mangadexSearch = await searchMangaDexManga(kitsuData.attributes.canonicalTitle, 1)
-          const foundMangadexManga = mangadexSearch.data[0]
+        // Try to get manga by MangaDex ID first (if slug is actually an ID)
+        let kitsuData: KitsuManga | null = null
+        let mangadexId = mangaSlug
 
-          if (foundMangadexManga) {
-            setMangadexMangaId(foundMangadexManga.id)
-
-            const allChaptersData = await getMangaDexChapters(foundMangadexManga.id, 100)
-            const sortedChapters = (allChaptersData.data || []).sort((a, b) => {
-              const aNum = Number.parseFloat(a.attributes.chapter || "0")
-              const bNum = Number.parseFloat(b.attributes.chapter || "0")
-              const aVol = Number.parseFloat(a.attributes.volume || "0")
-              const bVol = Number.parseFloat(b.attributes.volume || "0")
-
-              if (aVol !== bVol) {
-                return aVol - bVol
-              }
-              return aNum - bNum
-            })
-            setAllMangaDexChapters(sortedChapters)
-
-            const currentChapterDetails = await getMangaDexChapter(chapterId)
-            setCurrentMangaDexChapter(currentChapterDetails.data)
-            setChapterTitle(
-              `Chapter ${currentChapterDetails.data?.attributes?.chapter || "?"}${
-                currentChapterDetails.data?.attributes?.title ? `: ${currentChapterDetails.data.attributes.title}` : ""
-              }`,
-            )
-
-            const pagesResponse = await getMangaDexChapterPages(chapterId)
-            const baseUrl = pagesResponse.baseUrl
-            const chapterData = pagesResponse.chapter
-
-            if (!chapterData || !chapterData.hash || !chapterData.data) {
-              console.error("MangaDex chapter data, hash, or image list is missing:", chapterData)
-              setImageUrls([])
-              setTotalPages(0)
-              setLoading(false)
-              return
+        // Check if mangaSlug is actually a MangaDx ID (UUID format)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        
+        if (uuidRegex.test(mangaSlug)) {
+          // It's a MangaDx ID, get manga details directly
+          try {
+            const mangadexResponse = await getMangaDexManga(mangaSlug)
+            const mdManga = mangadexResponse.data
+            if (mdManga) {
+              const mdTitle = mdManga.attributes.title?.en || Object.values(mdManga.attributes.title)[0] || ""
+              setMangaTitle(mdTitle)
+              
+              // Search Kitsu for additional metadata
+              const kitsuSearchData = await searchKitsuManga(mdTitle, 1)
+              kitsuData = kitsuSearchData.data[0] || null
             }
-
-            const rawPageUrls = chapterData.data.map((page: string) => `${baseUrl}/data/${chapterData.hash}/${page}`)
-            setImageUrls(rawPageUrls)
-            setTotalPages(rawPageUrls.length)
-
-            const readingHistory = JSON.parse(localStorage.getItem("readingHistory") || "{}")
-            const savedProgress = readingHistory[mangaSlug]
-            let initialPage = 1
-
-            if (savedProgress && savedProgress.chapterId === chapterId && savedProgress.page) {
-              initialPage = Math.min(savedProgress.page, rawPageUrls.length)
-            }
-            setCurrentPage(initialPage)
-
-            // Save initial progress
-            saveReadingProgress(initialPage)
-          } else {
-            console.warn(`No MangaDex entry found for Kitsu manga: ${kitsuData.attributes.canonicalTitle}`)
-            setImageUrls([])
-            setTotalPages(0)
+          } catch (error) {
+            console.error('Error fetching MangaDx manga by ID:', error)
           }
         } else {
+          // It's a slug, try Kitsu first then find MangaDx ID
+          kitsuData = await getKitsuMangaBySlug(mangaSlug)
+          if (kitsuData) {
+            setMangaTitle(kitsuData.attributes.canonicalTitle || kitsuData.attributes.titles.en_jp || "Unknown Manga")
+            
+            const mangadexSearch = await searchMangaDexManga(kitsuData.attributes.canonicalTitle, 1)
+            const foundMangadexManga = mangadexSearch.data[0]
+            if (foundMangadexManga) {
+              mangadexId = foundMangadexManga.id
+            }
+          }
+        }
+
+        setKitsuManga(kitsuData)
+        setMangadexMangaId(mangadexId)
+
+        if (mangadexId) {
+          const allChaptersData = await getMangaDexChapters(mangadexId, 100)
+          const sortedChapters = (allChaptersData.data || []).sort((a, b) => {
+            const aNum = Number.parseFloat(a.attributes.chapter || "0")
+            const bNum = Number.parseFloat(b.attributes.chapter || "0")
+            const aVol = Number.parseFloat(a.attributes.volume || "0")
+            const bVol = Number.parseFloat(b.attributes.volume || "0")
+
+            if (aVol !== bVol) {
+              return aVol - bVol
+            }
+            return aNum - bNum
+          })
+          setAllMangaDexChapters(sortedChapters)
+
+          const currentChapterDetails = await getMangaDexChapter(chapterId)
+          setCurrentMangaDexChapter(currentChapterDetails.data)
+          setChapterTitle(
+            `Chapter ${currentChapterDetails.data?.attributes?.chapter || "?"}${
+              currentChapterDetails.data?.attributes?.title ? `: ${currentChapterDetails.data.attributes.title}` : ""
+            }`,
+          )
+
+          const pagesResponse = await getMangaDexChapterPages(chapterId)
+          const baseUrl = pagesResponse.baseUrl
+          const chapterData = pagesResponse.chapter
+
+          if (!chapterData || !chapterData.hash || !chapterData.data) {
+            console.error("MangaDx chapter data, hash, or image list is missing:", chapterData)
+            setImageUrls([])
+            setTotalPages(0)
+            setLoading(false)
+            return
+          }
+
+          const rawPageUrls = chapterData.data.map((page: string) => `${baseUrl}/data/${chapterData.hash}/${page}`)
+          setImageUrls(rawPageUrls)
+          setTotalPages(rawPageUrls.length)
+
+          const readingHistory = JSON.parse(localStorage.getItem("readingHistory") || "{}")
+          const savedProgress = readingHistory[mangaSlug]
+          let initialPage = 1
+
+          if (savedProgress && savedProgress.chapterId === chapterId && savedProgress.page) {
+            initialPage = Math.min(savedProgress.page, rawPageUrls.length)
+          }
+          setCurrentPage(initialPage)
+
+          // Save initial progress
+          saveReadingProgress(initialPage)
+        } else {
+          console.warn(`No MangaDx entry found for manga: ${mangaSlug}`)
           setImageUrls([])
           setTotalPages(0)
         }
@@ -252,14 +339,14 @@ export default function ReaderPage() {
         clearTimeout(autoHideTimer.current)
       }
     }
-  }, [mangaSlug, chapterId, hideControlsAfterDelay, saveReadingProgress])
+  }, [mangaSlug, chapterId, hideControlsAfterDelay, saveReadingProgress, checkOfflineContent])
 
   // Preload images based on current page
   useEffect(() => {
     if (imageUrls.length > 0) {
       const pagesToLoad = []
 
-      // Current page
+      // Current page(s)
       if (readingMode === "double") {
         pagesToLoad.push(currentPage - 1)
         if (currentPage < totalPages) pagesToLoad.push(currentPage)
@@ -325,13 +412,16 @@ export default function ReaderPage() {
         case "h":
           setShowControls(!showControls)
           break
+        case "s":
+          setShowSettings(!showSettings)
+          break
       }
       showControlsTemporarily()
     }
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [currentPage, totalPages, router, showControlsTemporarily, mangaSlug, direction, readingMode, showControls])
+  }, [currentPage, totalPages, router, showControlsTemporarily, mangaSlug, direction, readingMode, showControls, showSettings])
 
   const nextPage = () => {
     setPageTransition(true)
@@ -390,13 +480,13 @@ export default function ReaderPage() {
     const ctx = canvas.getContext("2d")
 
     if (!ctx) {
-      alert("Canvas not supported")
+      toast.error("Canvas not supported")
       return
     }
 
     const currentImageUrl = loadedImages.get(currentPage - 1)
     if (!currentImageUrl || currentImageUrl === "loading" || currentImageUrl === "/placeholder.svg") {
-      alert("Image not loaded yet")
+      toast.error("Image not loaded yet")
       return
     }
 
@@ -417,27 +507,49 @@ export default function ReaderPage() {
           link.click()
           document.body.removeChild(link)
           URL.revokeObjectURL(url)
+          toast.success("Screenshot saved!")
         }
       }, "image/png")
     }
     img.onerror = () => {
-      alert("Failed to load image for screenshot")
+      toast.error("Failed to load image for screenshot")
     }
     img.src = currentImageUrl
   }
 
-  const handleDownloadPage = () => {
-    const currentImageUrl = loadedImages.get(currentPage - 1)
-    if (currentImageUrl && currentImageUrl !== "loading" && currentImageUrl !== "/placeholder.svg") {
-      const link = document.createElement("a")
-      link.href = currentImageUrl
-      link.download = `${mangaTitle}_Chapter_${currentMangaDexChapter?.attributes.chapter}_Page_${currentPage}.png`
-      link.target = "_blank"
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } else {
-      alert("Image not available for download yet.")
+  const handleDownloadChapter = async () => {
+    if (downloading || isOffline) return
+
+    setDownloading(true)
+    try {
+      // Calculate total size (estimate)
+      const estimatedSize = imageUrls.length * 500000 // 500KB per page estimate
+
+      const downloadData: DownloadedChapter = {
+        id: `${mangaSlug}-${chapterId}`,
+        mangaId: mangadexMangaId || mangaSlug,
+        mangaTitle: mangaTitle,
+        mangaSlug: mangaSlug,
+        chapterId: chapterId,
+        chapterNumber: currentMangaDexChapter?.attributes?.chapter || "Unknown",
+        chapterTitle: currentMangaDexChapter?.attributes?.title || "",
+        posterUrl: kitsuManga?.attributes?.posterImage?.medium || "/placeholder.svg",
+        pages: imageUrls,
+        downloadedAt: new Date().toISOString(),
+        size: estimatedSize
+      }
+
+      const existingDownloads = JSON.parse(localStorage.getItem('manga_downloads') || '[]')
+      const updatedDownloads = existingDownloads.filter((d: DownloadedChapter) => d.id !== downloadData.id)
+      updatedDownloads.push(downloadData)
+      
+      localStorage.setItem('manga_downloads', JSON.stringify(updatedDownloads))
+      toast.success("Chapter downloaded for offline reading!")
+    } catch (error) {
+      console.error('Error downloading chapter:', error)
+      toast.error("Failed to download chapter")
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -487,7 +599,7 @@ export default function ReaderPage() {
     )
   }
 
-  if (!kitsuManga || imageUrls.length === 0) {
+  if ((!kitsuManga && !isOffline) || imageUrls.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -553,6 +665,7 @@ export default function ReaderPage() {
                   <h1 className="font-semibold text-sm">{chapterTitle}</h1>
                   <p className="text-xs text-gray-400">
                     Page {currentPage} of {totalPages}
+                    {isOffline && <Badge className="ml-2 bg-green-600/20 text-green-400 text-xs">Offline</Badge>}
                   </p>
                 </div>
               </div>
@@ -596,14 +709,15 @@ export default function ReaderPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setDarkMode(!darkMode)}
+                      onClick={() => setShowSettings(!showSettings)}
                       className="text-white hover:bg-gray-800"
                     >
-                      {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                      <Settings className="w-4 h-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>{darkMode ? "Light Mode" : "Dark Mode"}</TooltipContent>
+                  <TooltipContent>Settings</TooltipContent>
                 </Tooltip>
+
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -622,6 +736,101 @@ export default function ReaderPage() {
           </div>
         </div>
 
+        {/* Settings Panel */}
+        {showSettings && (
+          <div className="fixed top-16 right-4 z-50 w-80">
+            <Card className="bg-gray-900/95 backdrop-blur-md border-gray-700">
+              <CardContent className="p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-white font-semibold">Reader Settings</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSettings(false)}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    ×
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm text-gray-300 block mb-2">Reading Mode</label>
+                    <Select value={readingMode} onValueChange={(value: ReadingMode) => setReadingMode(value)}>
+                      <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="single">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" />
+                            Single Page
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="double">
+                          <div className="flex items-center gap-2">
+                            <Tablet className="w-4 h-4" />
+                            Double Page
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="vertical">
+                          <div className="flex items-center gap-2">
+                            <Monitor className="w-4 h-4" />
+                            Vertical
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="webtoon">
+                          <div className="flex items-center gap-2">
+                            <BookOpen className="w-4 h-4" />
+                            Webtoon
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-300 block mb-2">Reading Direction</label>
+                    <Select value={direction} onValueChange={(value: Direction) => setDirection(value)}>
+                      <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="rtl">Right to Left (Manga)</SelectItem>
+                        <SelectItem value="ltr">Left to Right (Western)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-300 block mb-2">Theme</label>
+                    <Button
+                      variant="outline"
+                      onClick={() => setDarkMode(!darkMode)}
+                      className="w-full justify-start border-gray-700 text-white"
+                    >
+                      {darkMode ? <Moon className="w-4 h-4 mr-2" /> : <Sun className="w-4 h-4 mr-2" />}
+                      {darkMode ? "Dark Mode" : "Light Mode"}
+                    </Button>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-300 block mb-2">Zoom: {zoom}%</label>
+                    <Slider
+                      value={[zoom]}
+                      onValueChange={(value) => setZoom(value[0])}
+                      min={50}
+                      max={200}
+                      step={25}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Reading Area */}
         <div className="h-screen flex items-center justify-center p-4 pt-16 pb-20">
           {readingMode === "vertical" || readingMode === "webtoon" ? (
@@ -629,7 +838,7 @@ export default function ReaderPage() {
               {imageUrls.map((_, index) => renderPage(index))}
             </div>
           ) : readingMode === "double" ? (
-            <div className="flex h-full max-w-6xl mx-auto">
+            <div className={`flex h-full max-w-6xl mx-auto ${direction === "rtl" ? "flex-row-reverse" : "flex-row"}`}>
               {direction === "rtl" ? (
                 <>
                   {currentPage < totalPages && renderPage(currentPage, true)}
@@ -751,30 +960,6 @@ export default function ReaderPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Reading Mode */}
-                  <Select value={readingMode} onValueChange={(value: ReadingMode) => setReadingMode(value)}>
-                    <SelectTrigger className="w-32 h-8 bg-gray-800 border-gray-700 text-white text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="single">Single Page</SelectItem>
-                      <SelectItem value="double">Double Page</SelectItem>
-                      <SelectItem value="vertical">Vertical</SelectItem>
-                      <SelectItem value="webtoon">Webtoon</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {/* Direction */}
-                  <Select value={direction} onValueChange={(value: Direction) => setDirection(value)}>
-                    <SelectTrigger className="w-20 h-8 bg-gray-800 border-gray-700 text-white text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="rtl">RTL</SelectItem>
-                      <SelectItem value="ltr">LTR</SelectItem>
-                    </SelectContent>
-                  </Select>
-
                   {/* Actions */}
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -789,19 +974,23 @@ export default function ReaderPage() {
                     </TooltipTrigger>
                     <TooltipContent>Screenshot</TooltipContent>
                   </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleDownloadPage}
-                        className="text-white hover:bg-gray-800"
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Download</TooltipContent>
-                  </Tooltip>
+                  
+                  {!isOffline && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleDownloadChapter}
+                          disabled={downloading}
+                          className="text-white hover:bg-gray-800"
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Download Chapter</TooltipContent>
+                    </Tooltip>
+                  )}
                 </div>
               </div>
             </div>

@@ -21,6 +21,7 @@ interface MangaCardProps {
   contentRating?: string
   showAddButton?: boolean
   className?: string
+  useMangaDxId?: boolean // New prop to determine if we should use MangaDx ID for routing
 }
 
 export default function MangaCard({
@@ -35,15 +36,19 @@ export default function MangaCard({
   year,
   contentRating,
   showAddButton = true,
-  className = ''
+  className = '',
+  useMangaDxId = false
 }: MangaCardProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
 
+  // Use MangaDx ID for routing if specified, otherwise use slug
+  const linkHref = useMangaDxId ? `/manga/${id}` : `/manga/${slug}`
+
   const mangaData = {
     manga_id: id,
     manga_title: title,
-    manga_slug: slug,
+    manga_slug: useMangaDxId ? id : slug, // Use ID as slug for consistency
     poster_url: posterUrl,
     cover_url: coverUrl,
     description: description,
@@ -147,7 +152,7 @@ export default function MangaCard({
   return (
     <>
       <div className={`group relative transform transition-all duration-700 hover:scale-[1.03] ${className}`}>
-        <Link href={`/manga/${slug}`} className="block">
+        <Link href={linkHref} className="block">
           <div className="relative bg-gradient-to-br from-slate-900/60 via-slate-800/40 to-slate-900/70 backdrop-blur-xl rounded-2xl overflow-hidden border border-slate-600/20 hover:border-red-400/40 transition-all duration-700 hover:shadow-2xl hover:shadow-red-500/20 group-hover:bg-gradient-to-br group-hover:from-slate-800/70 group-hover:to-slate-900/80">
             
             {/* Premium Image Container */}
@@ -223,6 +228,7 @@ export default function MangaCard({
               {rating && (
                 <div className="absolute bottom-4 left-4 z-20">
                   <div className="relative">
+                    
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-2xl rounded-xl border border-white/10 shadow-2xl" />
                     <div className="relative flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-amber-500/90 to-yellow-500/90 text-white rounded-xl backdrop-blur-sm border border-amber-400/40 shadow-lg shadow-amber-500/30">
                       <Star className="w-4 h-4 fill-current" />

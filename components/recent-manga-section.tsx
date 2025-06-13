@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Clock } from "lucide-react"
-import { getMangaDexRecentWithKitsuPosters } from "@/lib/mangadex-api"
+import { getMangaDxRecentWithKitsuPosters } from "@/lib/mangadx-api"
 import { slugify } from "@/lib/slugify"
 import MangaCard from "@/components/manga-card"
 
@@ -33,7 +33,7 @@ export default function RecentMangaSection() {
   useEffect(() => {
     const fetchUpdates = async () => {
       try {
-        const data = await getMangaDexRecentWithKitsuPosters(12)
+        const data = await getMangaDxRecentWithKitsuPosters(12)
         setUpdates(data || [])
       } catch (error) {
         console.error("Error fetching latest updates:", error)
@@ -85,7 +85,7 @@ export default function RecentMangaSection() {
             (rel: any) => rel.type === 'cover_art' && rel.attributes?.fileName
           )
           const coverUrl = coverArt 
-            ? `https://uploads.mangadex.org/covers/${item.id}/${coverArt.attributes?.fileName}.256.jpg`
+            ? `https://uploads.mangadx.org/covers/${item.id}/${coverArt.attributes?.fileName}.256.jpg`
             : ''
 
           return (
@@ -100,6 +100,7 @@ export default function RecentMangaSection() {
               status={item.attributes.status}
               year={item.attributes.year}
               contentRating={item.attributes.contentRating}
+              useMangaDxId={true} // Use MangaDx ID for routing
             />
           )
         })}

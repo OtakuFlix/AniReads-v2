@@ -39,11 +39,12 @@ export async function GET(request: NextRequest, { params }: { params: { path?: s
     }
 
     switch (apiName) {
+      case "mangadx":
       case "mangadex":
-        baseUrl = process.env.MANGADEX_API_URL
+        baseUrl = process.env.MANGADX_API_URL || "https://api.mangadex.org"
         break
       case "kitsu":
-        baseUrl = process.env.KITSU_API_URL
+        baseUrl = process.env.KITSU_API_URL || "https://kitsu.io/api/edge"
         break
       default:
         return NextResponse.json({ error: "Invalid API name" }, { status: 400 })
@@ -89,11 +90,12 @@ export async function POST(request: NextRequest, { params }: { params: { path: s
     }
 
     switch (apiName) {
+      case "mangadx":
       case "mangadex":
-        baseUrl = process.env.MANGADEX_API_URL
+        baseUrl = process.env.MANGADX_API_URL || "https://api.mangadex.org"
         break
       case "kitsu":
-        baseUrl = process.env.KITSU_API_URL
+        baseUrl = process.env.KITSU_API_URL || "https://kitsu.io/api/edge"
         break
       default:
         return NextResponse.json({ error: "Invalid API name" }, { status: 400 })
@@ -132,4 +134,3 @@ export async function POST(request: NextRequest, { params }: { params: { path: s
     return NextResponse.json({ error: "Failed to post data via proxy" }, { status: 500 })
   }
 }
-
