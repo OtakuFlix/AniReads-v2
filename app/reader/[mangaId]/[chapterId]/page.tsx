@@ -27,7 +27,7 @@ import {
   getMangaDexChapterPages,
   getMangaDexChapters,
   type Chapter,
-} from "@/lib/mangadx-api"
+} from "@/lib/mangadex-api"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import DummyMangaPage from "@/components/dummy-manga-page"
@@ -202,7 +202,7 @@ export default function ReaderPage() {
             const chapterData = pagesResponse.chapter
 
             if (!chapterData || !chapterData.hash || !chapterData.data) {
-              console.error("MangaDX chapter data, hash, or image list is missing:", chapterData)
+              console.error("MangaDex chapter data, hash, or image list is missing:", chapterData)
               setImageUrls([])
               setTotalPages(0)
               setLoading(false)

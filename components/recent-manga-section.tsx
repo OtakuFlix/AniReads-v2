@@ -2,19 +2,39 @@
 
 import { useEffect, useState } from "react"
 import { Clock } from "lucide-react"
-import { getKitsuRecentManga, type KitsuManga } from "@/lib/kitsu-api"
+import { getMangaDexRecentWithKitsuPosters } from "@/lib/mangadex-api"
 import { slugify } from "@/lib/slugify"
 import MangaCard from "@/components/manga-card"
 
+interface MangaWithKitsuPoster {
+  id: string
+  attributes: {
+    title: Record<string, string>
+    description: Record<string, string>
+    status: string
+    year?: number
+    contentRating: string
+  }
+  kitsuPoster: string
+  relationships: Array<{
+    id: string
+    type: string
+    attributes?: {
+      name?: string
+      fileName?: string
+    }
+  }>
+}
+
 export default function RecentMangaSection() {
-  const [updates, setUpdates] = useState<KitsuManga[]>([])
+  const [updates, setUpdates] = useState<MangaWithKitsuPoster[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchUpdates = async () => {
       try {
-        const data = await getKitsuRecentManga(12)
-        setUpdates(data.data || [])
+        const data = await getMangaDexRecentWithKitsuPosters(12)
+        setUpdates(data || [])
       } catch (error) {
         console.error("Error fetching latest updates:", error)
       } finally {
@@ -55,12 +75,18 @@ export default function RecentMangaSection() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
         {updates.map((item) => {
-          const title = item.attributes.canonicalTitle || item.attributes.titles.en_jp || "Unknown Title"
-          const posterUrl = item.attributes.posterImage?.large || 
-                           item.attributes.posterImage?.medium || 
-                           item.attributes.posterImage?.small || 
-                           "/placeholder.svg"
+          const title = Object.values(item.attributes.title)[0] || "Unknown Title"
+          const posterUrl = item.kitsuPoster || "/placeholder.svg"
+          const description = Object.values(item.attributes.description)[0] || ""
           const mangaSlug = slugify(title)
+          
+          // Get cover art if available
+          const coverArt = item.relationships.find(
+            (rel: any) => rel.type === 'cover_art' && rel.attributes?.fileName
+          )
+          const coverUrl = coverArt 
+            ? `https://uploads.mangadex.org/covers/${item.id}/${coverArt.attributes?.fileName}.256.jpg`
+            : ''
 
           return (
             <MangaCard
@@ -69,8 +95,11 @@ export default function RecentMangaSection() {
               title={title}
               slug={mangaSlug}
               posterUrl={posterUrl}
+              coverUrl={coverUrl}
+              description={description}
               status={item.attributes.status}
-              chapterCount={item.attributes.chapterCount}
+              year={item.attributes.year}
+              contentRating={item.attributes.contentRating}
             />
           )
         })}

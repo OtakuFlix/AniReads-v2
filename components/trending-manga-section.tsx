@@ -3,20 +3,43 @@
 import { useEffect, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getKitsuTrendingManga, type KitsuManga } from "@/lib/kitsu-api"
+import { getMangaDexTrendingWithKitsuPosters } from "@/lib/mangadex-api"
 import { slugify } from "@/lib/slugify"
 import MangaCard from "@/components/manga-card"
 
+interface MangaWithKitsuPoster {
+  id: string
+  attributes: {
+    title: Record<string, string>
+    description: Record<string, string>
+    status: string
+    year?: number
+    contentRating: string
+  }
+  kitsuPoster: string
+  relationships: Array<{
+    id: string
+    type: string
+    attributes?: {
+      name?: string
+      fileName?: string
+    }
+  }>
+}
+
 export default function TrendingMangaSection() {
-  const [manga, setManga] = useState<KitsuManga[]>([])
+  const [manga, setManga] = useState<MangaWithKitsuPoster[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchManga = async () => {
       try {
-        const data = await getKitsuTrendingManga(20)
-        setManga(data.data || [])
+        // Log the MangaDex API URL
+        const apiUrl = "/api/proxy/mangadex/manga?limit=20&order[followedCount]=desc&includes[]=cover_art"
+        console.log("Trending MangaDex fetch URL:", apiUrl)
+        const data = await getMangaDexTrendingWithKitsuPosters(20)
+        setManga(data || [])
       } catch (error) {
         console.error("Error fetching trending manga:", error)
       } finally {
@@ -82,32 +105,36 @@ export default function TrendingMangaSection() {
 
       <div className="relative overflow-hidden">
         <div
-          className="flex transition-transform duration-500 ease-out gap-6"
-          style={{ transform: `translateX(-${currentIndex * 33.333}%)` }}
+          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
         >
           {manga.map((item) => {
-            const title = item.attributes.canonicalTitle || item.attributes.titles.en_jp || "Unknown Title"
-            const posterUrl = item.attributes.posterImage?.large || 
-                             item.attributes.posterImage?.medium || 
-                             item.attributes.posterImage?.small || 
-                             "/placeholder.svg"
-            const genres = item.relationships.genres?.data?.map((g: any) => g.attributes.name) || []
+            // Always use the English title for slug if available, otherwise fallback to first available title
+            const title = item.attributes.title.en || Object.values(item.attributes.title)[0] || "Unknown Title"
+            const posterUrl = item.kitsuPoster || "/placeholder.svg"
+            const description = item.attributes.description?.en || Object.values(item.attributes.description)[0] || ""
             const mangaSlug = slugify(title)
+            
+            // Get cover art if available
+            const coverArt = item.relationships.find(
+              (rel: any) => rel.type === 'cover_art' && rel.attributes?.fileName
+            )
+            const coverUrl = coverArt 
+              ? `https://uploads.mangadex.org/covers/${item.id}/${coverArt.attributes?.fileName}.256.jpg`
+              : ''
 
             return (
-              <div key={item.id} className="flex-none w-full md:w-1/2 lg:w-1/3">
-                <MangaCard
-                  id={item.id}
-                  title={title}
-                  slug={mangaSlug}
-                  posterUrl={posterUrl}
-                  rating={item.attributes.averageRating ? parseFloat(item.attributes.averageRating) : undefined}
-                  status={item.attributes.status}
-                  genres={genres}
-                  chapterCount={item.attributes.chapterCount}
-                  className="h-full"
-                />
-              </div>
+              <MangaCard
+                key={item.id}
+                id={item.id}
+                title={title}
+                slug={mangaSlug}
+                posterUrl={posterUrl}
+                coverUrl={coverUrl}
+                description={description}
+                status={item.attributes.status}
+                year={item.attributes.year}
+                contentRating={item.attributes.contentRating}
+              />
             )
           })}
         </div>

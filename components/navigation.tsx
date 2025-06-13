@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, Search, Heart, Download, Menu, X, User, LogOut, Library } from "lucide-react"
+import { BookOpen, Search, Bookmark, Download, Menu, X, User, LogOut, Library } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import AuthModal from "@/components/auth/auth-modal"
@@ -26,7 +26,7 @@ export default function Navigation() {
     { href: "/", label: "Home", icon: BookOpen },
     { href: "/search", label: "Search", icon: Search },
     { href: "/library", label: "Library", icon: Library, requireAuth: true },
-    { href: "/favorites", label: "Favorites", icon: Heart, requireAuth: true },
+    { href: "/bookmarks", label: "Bookmarks", icon: Bookmark, requireAuth: false },
     { href: "/downloads", label: "Downloads", icon: Download, requireAuth: true },
   ]
 
@@ -122,9 +122,9 @@ export default function Navigation() {
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link href="/favorites" className="flex items-center">
-                        <Heart className="mr-2 h-4 w-4" />
-                        <span>Favorites</span>
+                      <Link href="/bookmarks" className="flex items-center">
+                        <Bookmark className="mr-2 h-4 w-4" />
+                        <span>Bookmarks</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />

@@ -6,20 +6,19 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import Image from "next/image"
-import { getKitsuTrendingManga, getKitsuPosterImage, getKitsuCoverImage, type KitsuManga } from "@/lib/kitsu-api"
+import { getMangaDexTrendingWithKitsuPosters } from "@/lib/mangadex-api"
 import { slugify } from "@/lib/slugify"
 
 export default function SpotlightSection() {
-  const [spotlightManga, setSpotlightManga] = useState<KitsuManga[]>([])
+  const [spotlightManga, setSpotlightManga] = useState<any[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchSpotlightManga = async () => {
       try {
-        const data = await getKitsuTrendingManga(20) // Fetch more to ensure we find enough with banners
-        const filteredManga = (data.data || []).filter((manga) => manga.attributes.coverImage !== null).slice(0, 5) // Take top 5 that have cover images
-        setSpotlightManga(filteredManga)
+        const data = await getMangaDexTrendingWithKitsuPosters(10)
+        setSpotlightManga(data || [])
       } catch (error) {
         console.error("Error fetching spotlight manga:", error)
       } finally {
@@ -66,12 +65,16 @@ export default function SpotlightSection() {
   }
 
   const currentManga = spotlightManga[currentIndex]
-  const title = currentManga.attributes.canonicalTitle || currentManga.attributes.titles.en_jp || "Unknown Title"
-  const description = currentManga.attributes.description || "No description available."
-  const coverUrl = getKitsuCoverImage(currentManga.attributes.coverImage)
-  const posterUrl = getKitsuPosterImage(currentManga.attributes.posterImage)
+  const title = currentManga.attributes.title.en || Object.values(currentManga.attributes.title)[0] || "Unknown Title"
+  const description = currentManga.attributes.description?.en || Object.values(currentManga.attributes.description)[0] || "No description available."
+  const coverArt = currentManga.relationships.find((rel: any) => rel.type === 'cover_art' && rel.attributes?.fileName)
+  const coverUrl = coverArt ? `https://uploads.mangadex.org/covers/${currentManga.id}/${coverArt.attributes?.fileName}.512.jpg` : "/placeholder.svg?height=600&width=1200"
+  const posterUrl = currentManga.kitsuPoster || "/placeholder.svg"
   const mangaSlug = slugify(title)
-  const genres = currentManga.relationships.genres?.data?.map((g: any) => g.attributes.name) || []
+  const genres: string[] = Array.isArray(currentManga.attributes.tags)
+    ? currentManga.attributes.tags.map((tag: any) => tag?.attributes?.name?.en || '').filter(Boolean).slice(0, 4)
+    : [];
+  const contentRating = currentManga.attributes.contentRating
 
   return (
     <section className="relative h-[70vh] rounded-3xl overflow-hidden group shadow-2xl shadow-red-900/50">
@@ -139,13 +142,13 @@ export default function SpotlightSection() {
                 <div className="flex items-center gap-4 text-sm text-gray-400">
                   <div className="flex items-center gap-2">
                     <BookOpen className="w-4 h-4" />
-                    <span>{currentManga.attributes.chapterCount || "?"} Chapters</span>
+                    <span>{typeof currentManga.attributes.chapterCount === 'number' ? currentManga.attributes.chapterCount : "?"} Chapters</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
                     <span>
-                      {currentManga.attributes.startDate
-                        ? new Date(currentManga.attributes.startDate).getFullYear()
+                      {currentManga.attributes.year
+                        ? currentManga.attributes.year
                         : "Unknown"}
                     </span>
                   </div>
@@ -153,6 +156,9 @@ export default function SpotlightSection() {
                     {currentManga.attributes.status
                       ? currentManga.attributes.status.charAt(0).toUpperCase() + currentManga.attributes.status.slice(1)
                       : "Unknown"}
+                  </Badge>
+                  <Badge variant="outline" className={`text-xs px-2 py-1 rounded-full font-bold border-2 ${contentRating ? (contentRating.toLowerCase() === 'safe' ? 'border-green-500 text-green-400' : contentRating.toLowerCase() === 'suggestive' ? 'border-yellow-500 text-yellow-400' : 'border-red-500 text-red-400') : 'border-gray-500 text-gray-300'}`}>
+                    {contentRating ? contentRating.toUpperCase() : 'N/A'}
                   </Badge>
                 </div>
               </div>
